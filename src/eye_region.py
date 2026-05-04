@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 
 
 LEFT_EYE_IDX = [33, 160, 158, 133, 153, 144]
@@ -20,3 +21,36 @@ def draw_eye_contour(frame, eye_points, color=(255, 0, 0)):
 
     for point in eye_points:
         cv2.circle(frame, point, 2, (0, 255, 255), -1)
+
+
+def extract_eye_region(frame, eye_points, padding=8):
+    """
+    Crops the eye region from the full frame using eye landmark points.
+    Returns:
+    - eye_crop
+    - bounding box: x, y, w, h
+    """
+
+    if len(eye_points) == 0:
+        return None, None
+
+    points = np.array(eye_points)
+
+    x, y, w, h = cv2.boundingRect(points)
+
+    x = max(x - padding, 0)
+    y = max(y - padding, 0)
+    w = w + (padding * 2)
+    h = h + (padding * 2)
+
+    frame_h, frame_w = frame.shape[:2]
+
+    if x + w > frame_w:
+        w = frame_w - x
+
+    if y + h > frame_h:
+        h = frame_h - y
+
+    eye_crop = frame[y:y+h, x:x+w]
+
+    return eye_crop, (x, y, w, h)
