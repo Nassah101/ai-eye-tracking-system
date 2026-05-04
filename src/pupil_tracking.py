@@ -1,26 +1,42 @@
 import cv2
-import numpy as np
 
 
-def find_pupil_center(eye_crop):
+def preprocess_eye(eye_crop, threshold_value=45):
     """
-    Finds the pupil center inside a cropped eye image.
-    This uses a simple dark-region detection approach.
+    Preprocesses the cropped eye image before pupil detection.
+
+    Steps:
+    1. Convert to grayscale
+    2. Apply Gaussian blur
+    3. Apply inverse threshold to highlight dark pupil regions
     """
 
     if eye_crop is None or eye_crop.size == 0:
-        return None, None
+        return None
 
     gray = cv2.cvtColor(eye_crop, cv2.COLOR_BGR2GRAY)
 
-    gray = cv2.GaussianBlur(gray, (7, 7), 0)
+    blurred = cv2.GaussianBlur(gray, (7, 7), 0)
 
     _, threshold = cv2.threshold(
-        gray,
-        45,
+        blurred,
+        threshold_value,
         255,
         cv2.THRESH_BINARY_INV
     )
+
+    return threshold
+
+
+def find_pupil_center(eye_crop, threshold_value=45):
+    """
+    Finds the pupil center inside a cropped eye image.
+    """
+
+    threshold = preprocess_eye(eye_crop, threshold_value)
+
+    if threshold is None:
+        return None, None
 
     contours, _ = cv2.findContours(
         threshold,
