@@ -8,6 +8,7 @@ from src.eye_region import (
     extract_eye_region
 )
 from src.pupil_tracking import find_pupil_center
+from src.gaze_estimation import estimate_gaze, combine_gaze
 
 
 def draw_pupil_on_frame(frame, pupil_center, eye_box):
@@ -24,7 +25,7 @@ def draw_pupil_on_frame(frame, pupil_center, eye_box):
 
 
 def main():
-    print("Starting Phase 4 - Eye Cropping and Pupil Tracking...")
+    print("Starting Phase 6 - Gaze Estimation...")
 
     cap = cv2.VideoCapture(0)
 
@@ -33,6 +34,8 @@ def main():
         return
 
     detector = FaceMeshDetector()
+
+    current_gaze = "Unknown"
 
     while True:
         ret, frame = cap.read()
@@ -68,17 +71,29 @@ def main():
                 x, y, w, h = right_eye_box
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 255, 0), 1)
 
+            left_gaze = "Unknown"
+            right_gaze = "Unknown"
+
             if left_eye_crop is not None and left_eye_crop.size > 0:
+                left_eye_height, left_eye_width = left_eye_crop.shape[:2]
+                left_gaze = estimate_gaze(left_pupil, left_eye_width)
                 cv2.imshow("Left Eye Crop", left_eye_crop)
 
             if right_eye_crop is not None and right_eye_crop.size > 0:
+                right_eye_height, right_eye_width = right_eye_crop.shape[:2]
+                right_gaze = estimate_gaze(right_pupil, right_eye_width)
                 cv2.imshow("Right Eye Crop", right_eye_crop)
+
+            current_gaze = combine_gaze(left_gaze, right_gaze)
 
             if left_threshold is not None:
                 cv2.imshow("Left Eye Threshold", left_threshold)
 
             if right_threshold is not None:
                 cv2.imshow("Right Eye Threshold", right_threshold)
+
+        else:
+            current_gaze = "No Face Detected"
 
         cv2.putText(
             frame,
@@ -90,7 +105,17 @@ def main():
             2
         )
 
-        cv2.imshow("Phase 4 - Pupil Tracking", frame)
+        cv2.putText(
+            frame,
+            f"Gaze: {current_gaze}",
+            (20, 80),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 0, 255),
+            2
+        )
+
+        cv2.imshow("Phase 6 - Gaze Estimation", frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
