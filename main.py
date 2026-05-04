@@ -11,6 +11,7 @@ from src.pupil_tracking import find_pupil_center
 from src.gaze_estimation import estimate_gaze, combine_gaze
 from src.attention import AttentionTracker
 from src.session_tracker import SessionTracker, format_time, get_engagement_label
+from src.blink_detection import BlinkDetector
 
 
 def draw_pupil_on_frame(frame, pupil_center, eye_box):
@@ -34,14 +35,15 @@ def draw_dashboard(
     session_duration,
     attentive_time,
     distraction_count,
-    engagement_label
+    engagement_label,
+    blink_count,
+    ear_value
 ):
     """
     Draws the business use case dashboard on the webcam frame.
     """
 
-    # Dashboard background
-    cv2.rectangle(frame, (10, 10), (520, 240), (30, 30, 30), -1)
+    cv2.rectangle(frame, (10, 10), (560, 310), (30, 30, 30), -1)
 
     cv2.putText(
         frame,
@@ -115,8 +117,29 @@ def draw_dashboard(
 
     cv2.putText(
         frame,
+        f"Blink Count: {blink_count}",
+        (20, 255),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        2
+    )
+
+    if ear_value is not None:
+        cv2.putText(
+            frame,
+            f"EAR: {ear_value:.2f}",
+            (300, 255),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 255, 255),
+            2
+        )
+
+    cv2.putText(
+        frame,
         f"Student Engagement: {engagement_label}",
-        (20, 270),
+        (20, 290),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.7,
         (255, 255, 0),
@@ -125,7 +148,7 @@ def draw_dashboard(
 
 
 def main():
-    print("Starting Phase 8 - Online Learning Attention Monitor...")
+    print("Starting Phase 9 - Blink Detection...")
 
     cap = cv2.VideoCapture(0)
 
@@ -136,10 +159,13 @@ def main():
     detector = FaceMeshDetector()
     attention_tracker = AttentionTracker(max_history=60)
     session_tracker = SessionTracker()
+    blink_detector = BlinkDetector(threshold=0.21, consecutive_frames=2)
 
     current_gaze = "Unknown"
     attention_state = "Unknown"
     attention_score = 0
+    blink_count = 0
+    ear_value = None
 
     while True:
         ret, frame = cap.read()
@@ -160,6 +186,12 @@ def main():
 
             draw_eye_contour(frame, left_eye_points)
             draw_eye_contour(frame, right_eye_points)
+
+            # Blink detection
+            blink_count, ear_value = blink_detector.update(
+                left_eye_points,
+                right_eye_points
+            )
 
             left_eye_crop, left_eye_box = extract_eye_region(frame, left_eye_points)
             right_eye_crop, right_eye_box = extract_eye_region(frame, right_eye_points)
@@ -211,6 +243,7 @@ def main():
 
         else:
             current_gaze = "No Face Detected"
+            ear_value = None
 
         attention_state = attention_tracker.update_attention_state(
             gaze_label=current_gaze,
@@ -235,10 +268,12 @@ def main():
             session_duration=session_duration,
             attentive_time=attentive_time,
             distraction_count=distraction_count,
-            engagement_label=engagement_label
+            engagement_label=engagement_label,
+            blink_count=blink_count,
+            ear_value=ear_value
         )
 
-        cv2.imshow("Phase 8 - Online Learning Attention Monitor", frame)
+        cv2.imshow("Phase 9 - Blink Detection", frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
