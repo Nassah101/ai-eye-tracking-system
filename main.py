@@ -13,6 +13,7 @@ from src.attention import AttentionTracker
 from src.session_tracker import SessionTracker, format_time, get_engagement_label
 from src.blink_detection import BlinkDetector
 from src.heatmap import GazeHeatmap
+from src.head_pose import HeadPoseEstimator
 
 
 def draw_pupil_on_frame(frame, pupil_center, eye_box):
@@ -39,9 +40,11 @@ def draw_dashboard(
     engagement_label,
     blink_count,
     ear_value,
-    recorded_points
+    recorded_points,
+    head_direction,
+    pose_angles
 ):
-    cv2.rectangle(frame, (10, 10), (590, 340), (30, 30, 30), -1)
+    cv2.rectangle(frame, (10, 10), (640, 400), (30, 30, 30), -1)
 
     cv2.putText(
         frame,
@@ -65,8 +68,18 @@ def draw_dashboard(
 
     cv2.putText(
         frame,
-        f"Attention State: {attention_state}",
+        f"Head Direction: {head_direction}",
         (20, 105),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (0, 255, 255),
+        2
+    )
+
+    cv2.putText(
+        frame,
+        f"Attention State: {attention_state}",
+        (20, 135),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.6,
         (0, 255, 0) if attention_state == "Attentive" else (0, 0, 255),
@@ -76,7 +89,7 @@ def draw_dashboard(
     cv2.putText(
         frame,
         f"Attention Score: {attention_score}%",
-        (20, 135),
+        (20, 165),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.6,
         (255, 0, 255),
@@ -86,16 +99,6 @@ def draw_dashboard(
     cv2.putText(
         frame,
         f"Session Time: {format_time(session_duration)}",
-        (20, 165),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.6,
-        (255, 255, 255),
-        2
-    )
-
-    cv2.putText(
-        frame,
-        f"Attentive Time: {format_time(attentive_time)}",
         (20, 195),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.6,
@@ -105,7 +108,7 @@ def draw_dashboard(
 
     cv2.putText(
         frame,
-        f"Distraction Count: {distraction_count}",
+        f"Attentive Time: {format_time(attentive_time)}",
         (20, 225),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.6,
@@ -115,8 +118,18 @@ def draw_dashboard(
 
     cv2.putText(
         frame,
-        f"Blink Count: {blink_count}",
+        f"Distraction Count: {distraction_count}",
         (20, 255),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        2
+    )
+
+    cv2.putText(
+        frame,
+        f"Blink Count: {blink_count}",
+        (20, 285),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.6,
         (255, 255, 255),
@@ -127,7 +140,7 @@ def draw_dashboard(
         cv2.putText(
             frame,
             f"EAR: {ear_value:.2f}",
-            (300, 255),
+            (300, 285),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
             (255, 255, 255),
@@ -137,17 +150,30 @@ def draw_dashboard(
     cv2.putText(
         frame,
         f"Gaze Points Recorded: {recorded_points}",
-        (20, 285),
+        (20, 315),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.6,
         (255, 255, 255),
         2
     )
 
+    if pose_angles is not None:
+        pitch, yaw, roll = pose_angles
+
+        cv2.putText(
+            frame,
+            f"Pitch: {pitch:.1f}  Yaw: {yaw:.1f}  Roll: {roll:.1f}",
+            (20, 345),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (255, 255, 255),
+            2
+        )
+
     cv2.putText(
         frame,
         f"Student Engagement: {engagement_label}",
-        (20, 320),
+        (20, 380),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.7,
         (255, 255, 0),
@@ -156,7 +182,7 @@ def draw_dashboard(
 
 
 def main():
-    print("Starting Phase 10 - Heatmap Visualization...")
+    print("Starting Phase 11 - Head Pose Estimation...")
 
     cap = cv2.VideoCapture(0)
 
@@ -169,12 +195,15 @@ def main():
     session_tracker = SessionTracker()
     blink_detector = BlinkDetector(threshold=0.21, consecutive_frames=2)
     gaze_heatmap = GazeHeatmap()
+    head_pose_estimator = HeadPoseEstimator()
 
     current_gaze = "Unknown"
     attention_state = "Unknown"
     attention_score = 0
     blink_count = 0
     ear_value = None
+    head_direction = "Head Unknown"
+    pose_angles = None
     last_frame_shape = None
 
     while True:
@@ -203,6 +232,16 @@ def main():
                 left_eye_points,
                 right_eye_points
             )
+
+            head_direction, nose_line, pose_angles = head_pose_estimator.estimate_head_pose(
+                frame,
+                landmarks
+            )
+
+            if nose_line is not None:
+                nose_tip, projected_nose = nose_line
+                cv2.line(frame, nose_tip, projected_nose, (255, 0, 255), 2)
+                cv2.circle(frame, nose_tip, 5, (255, 0, 255), -1)
 
             left_eye_crop, left_eye_box = extract_eye_region(frame, left_eye_points)
             right_eye_crop, right_eye_box = extract_eye_region(frame, right_eye_points)
@@ -249,7 +288,6 @@ def main():
             if gaze_point is not None:
                 cv2.circle(frame, gaze_point, 8, (0, 255, 255), -1)
 
-            # Optional debug windows
             if left_eye_crop is not None and left_eye_crop.size > 0:
                 cv2.imshow("Left Eye Crop", left_eye_crop)
 
@@ -265,6 +303,8 @@ def main():
         else:
             current_gaze = "No Face Detected"
             ear_value = None
+            head_direction = "Head Unknown"
+            pose_angles = None
 
         attention_state = attention_tracker.update_attention_state(
             gaze_label=current_gaze,
@@ -292,10 +332,12 @@ def main():
             engagement_label=engagement_label,
             blink_count=blink_count,
             ear_value=ear_value,
-            recorded_points=len(gaze_heatmap.points)
+            recorded_points=len(gaze_heatmap.points),
+            head_direction=head_direction,
+            pose_angles=pose_angles
         )
 
-        cv2.imshow("Phase 10 - Heatmap Visualization", frame)
+        cv2.imshow("Phase 11 - Head Pose Estimation", frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
