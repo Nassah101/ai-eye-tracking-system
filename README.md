@@ -4,21 +4,31 @@ Real-time AI Eye Tracking System using OpenCV and MediaPipe
 
 
 
-\## Progress
+\#Business Use Case: Online Learning Attention Monitor
 
 
 
-\### Phase 1
-
-\- Webcam integration using OpenCV
+This project can be applied in online learning platforms to estimate whether a student is paying attention during virtual classes or remote assessments.
 
 
 
-\### Phase 2
+The system displays:
 
-\- Face detection implemented
+\- Gaze direction
 
-\- Facial landmarks extracted using MediaPipe Face Landmarker (Tasks API)
+\- Attention state
 
-\- Real-time visualization of 478 landmark points
+\- Attention score
+
+\- Session duration
+
+\- Total attentive time
+
+\- Distraction count
+
+\- Student engagement level
+
+
+
+This can help educators and learning platforms understand student engagement patterns during digital learning session
 

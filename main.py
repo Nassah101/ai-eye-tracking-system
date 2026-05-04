@@ -10,6 +10,7 @@ from src.eye_region import (
 from src.pupil_tracking import find_pupil_center
 from src.gaze_estimation import estimate_gaze, combine_gaze
 from src.attention import AttentionTracker
+from src.session_tracker import SessionTracker, format_time, get_engagement_label
 
 
 def draw_pupil_on_frame(frame, pupil_center, eye_box):
@@ -25,8 +26,106 @@ def draw_pupil_on_frame(frame, pupil_center, eye_box):
     cv2.circle(frame, (global_x, global_y), 5, (0, 0, 255), -1)
 
 
+def draw_dashboard(
+    frame,
+    current_gaze,
+    attention_state,
+    attention_score,
+    session_duration,
+    attentive_time,
+    distraction_count,
+    engagement_label
+):
+    """
+    Draws the business use case dashboard on the webcam frame.
+    """
+
+    # Dashboard background
+    cv2.rectangle(frame, (10, 10), (520, 240), (30, 30, 30), -1)
+
+    cv2.putText(
+        frame,
+        "Online Learning Attention Monitor",
+        (20, 40),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 255),
+        2
+    )
+
+    cv2.putText(
+        frame,
+        f"Gaze Direction: {current_gaze}",
+        (20, 75),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (0, 255, 255),
+        2
+    )
+
+    cv2.putText(
+        frame,
+        f"Attention State: {attention_state}",
+        (20, 105),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (0, 255, 0) if attention_state == "Attentive" else (0, 0, 255),
+        2
+    )
+
+    cv2.putText(
+        frame,
+        f"Attention Score: {attention_score}%",
+        (20, 135),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 0, 255),
+        2
+    )
+
+    cv2.putText(
+        frame,
+        f"Session Time: {format_time(session_duration)}",
+        (20, 165),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        2
+    )
+
+    cv2.putText(
+        frame,
+        f"Attentive Time: {format_time(attentive_time)}",
+        (20, 195),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        2
+    )
+
+    cv2.putText(
+        frame,
+        f"Distraction Count: {distraction_count}",
+        (20, 225),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        2
+    )
+
+    cv2.putText(
+        frame,
+        f"Student Engagement: {engagement_label}",
+        (20, 270),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 0),
+        2
+    )
+
+
 def main():
-    print("Starting Phase 7 - Screen Attention Estimation...")
+    print("Starting Phase 8 - Online Learning Attention Monitor...")
 
     cap = cv2.VideoCapture(0)
 
@@ -36,6 +135,7 @@ def main():
 
     detector = FaceMeshDetector()
     attention_tracker = AttentionTracker(max_history=60)
+    session_tracker = SessionTracker()
 
     current_gaze = "Unknown"
     attention_state = "Unknown"
@@ -96,6 +196,7 @@ def main():
 
             current_gaze = combine_gaze(left_gaze, right_gaze)
 
+            # Optional debug windows
             if left_eye_crop is not None and left_eye_crop.size > 0:
                 cv2.imshow("Left Eye Crop", left_eye_crop)
 
@@ -119,47 +220,25 @@ def main():
 
         attention_score = attention_tracker.compute_attention_score()
 
-        cv2.putText(
-            frame,
-            f"Landmarks: {len(landmarks)}",
-            (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (0, 255, 0),
-            2
+        session_tracker.update(attention_state)
+
+        session_duration = session_tracker.get_session_duration()
+        attentive_time = session_tracker.get_attentive_time()
+        distraction_count = session_tracker.get_distraction_count()
+        engagement_label = get_engagement_label(attention_score)
+
+        draw_dashboard(
+            frame=frame,
+            current_gaze=current_gaze,
+            attention_state=attention_state,
+            attention_score=attention_score,
+            session_duration=session_duration,
+            attentive_time=attentive_time,
+            distraction_count=distraction_count,
+            engagement_label=engagement_label
         )
 
-        cv2.putText(
-            frame,
-            f"Gaze: {current_gaze}",
-            (20, 80),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (0, 0, 255),
-            2
-        )
-
-        cv2.putText(
-            frame,
-            f"Attention: {attention_state}",
-            (20, 120),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (255, 0, 255),
-            2
-        )
-
-        cv2.putText(
-            frame,
-            f"Attention Score: {attention_score}%",
-            (20, 160),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (255, 0, 255),
-            2
-        )
-
-        cv2.imshow("Phase 7 - Screen Attention Estimation", frame)
+        cv2.imshow("Phase 8 - Online Learning Attention Monitor", frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
