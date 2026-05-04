@@ -9,6 +9,7 @@ from src.eye_region import (
 )
 from src.pupil_tracking import find_pupil_center
 from src.gaze_estimation import estimate_gaze, combine_gaze
+from src.attention import AttentionTracker
 
 
 def draw_pupil_on_frame(frame, pupil_center, eye_box):
@@ -25,7 +26,7 @@ def draw_pupil_on_frame(frame, pupil_center, eye_box):
 
 
 def main():
-    print("Starting Phase 6 - Gaze Estimation...")
+    print("Starting Phase 7 - Screen Attention Estimation...")
 
     cap = cv2.VideoCapture(0)
 
@@ -34,8 +35,11 @@ def main():
         return
 
     detector = FaceMeshDetector()
+    attention_tracker = AttentionTracker(max_history=60)
 
     current_gaze = "Unknown"
+    attention_state = "Unknown"
+    attention_score = 0
 
     while True:
         ret, frame = cap.read()
@@ -47,7 +51,10 @@ def main():
         results = detector.process(frame)
         landmarks = detector.get_landmarks(frame, results)
 
-        if len(landmarks) > 0:
+        face_detected = len(landmarks) > 0
+        both_eyes_detected = False
+
+        if face_detected:
             left_eye_points = get_eye_points(landmarks, LEFT_EYE_IDX)
             right_eye_points = get_eye_points(landmarks, RIGHT_EYE_IDX)
 
@@ -63,6 +70,11 @@ def main():
             draw_pupil_on_frame(frame, left_pupil, left_eye_box)
             draw_pupil_on_frame(frame, right_pupil, right_eye_box)
 
+            both_eyes_detected = (
+                left_pupil is not None
+                and right_pupil is not None
+            )
+
             if left_eye_box is not None:
                 x, y, w, h = left_eye_box
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 255, 0), 1)
@@ -75,16 +87,20 @@ def main():
             right_gaze = "Unknown"
 
             if left_eye_crop is not None and left_eye_crop.size > 0:
-                left_eye_height, left_eye_width = left_eye_crop.shape[:2]
+                _, left_eye_width = left_eye_crop.shape[:2]
                 left_gaze = estimate_gaze(left_pupil, left_eye_width)
+
+            if right_eye_crop is not None and right_eye_crop.size > 0:
+                _, right_eye_width = right_eye_crop.shape[:2]
+                right_gaze = estimate_gaze(right_pupil, right_eye_width)
+
+            current_gaze = combine_gaze(left_gaze, right_gaze)
+
+            if left_eye_crop is not None and left_eye_crop.size > 0:
                 cv2.imshow("Left Eye Crop", left_eye_crop)
 
             if right_eye_crop is not None and right_eye_crop.size > 0:
-                right_eye_height, right_eye_width = right_eye_crop.shape[:2]
-                right_gaze = estimate_gaze(right_pupil, right_eye_width)
                 cv2.imshow("Right Eye Crop", right_eye_crop)
-
-            current_gaze = combine_gaze(left_gaze, right_gaze)
 
             if left_threshold is not None:
                 cv2.imshow("Left Eye Threshold", left_threshold)
@@ -94,6 +110,14 @@ def main():
 
         else:
             current_gaze = "No Face Detected"
+
+        attention_state = attention_tracker.update_attention_state(
+            gaze_label=current_gaze,
+            face_detected=face_detected,
+            both_eyes_detected=both_eyes_detected
+        )
+
+        attention_score = attention_tracker.compute_attention_score()
 
         cv2.putText(
             frame,
@@ -115,7 +139,27 @@ def main():
             2
         )
 
-        cv2.imshow("Phase 6 - Gaze Estimation", frame)
+        cv2.putText(
+            frame,
+            f"Attention: {attention_state}",
+            (20, 120),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (255, 0, 255),
+            2
+        )
+
+        cv2.putText(
+            frame,
+            f"Attention Score: {attention_score}%",
+            (20, 160),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (255, 0, 255),
+            2
+        )
+
+        cv2.imshow("Phase 7 - Screen Attention Estimation", frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
