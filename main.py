@@ -12,6 +12,7 @@ from src.gaze_estimation import estimate_gaze, combine_gaze
 from src.attention import AttentionTracker
 from src.session_tracker import SessionTracker, format_time, get_engagement_label
 from src.blink_detection import BlinkDetector
+from src.heatmap import GazeHeatmap
 
 
 def draw_pupil_on_frame(frame, pupil_center, eye_box):
@@ -37,13 +38,10 @@ def draw_dashboard(
     distraction_count,
     engagement_label,
     blink_count,
-    ear_value
+    ear_value,
+    recorded_points
 ):
-    """
-    Draws the business use case dashboard on the webcam frame.
-    """
-
-    cv2.rectangle(frame, (10, 10), (560, 310), (30, 30, 30), -1)
+    cv2.rectangle(frame, (10, 10), (590, 340), (30, 30, 30), -1)
 
     cv2.putText(
         frame,
@@ -138,8 +136,18 @@ def draw_dashboard(
 
     cv2.putText(
         frame,
+        f"Gaze Points Recorded: {recorded_points}",
+        (20, 285),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        2
+    )
+
+    cv2.putText(
+        frame,
         f"Student Engagement: {engagement_label}",
-        (20, 290),
+        (20, 320),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.7,
         (255, 255, 0),
@@ -148,7 +156,7 @@ def draw_dashboard(
 
 
 def main():
-    print("Starting Phase 9 - Blink Detection...")
+    print("Starting Phase 10 - Heatmap Visualization...")
 
     cap = cv2.VideoCapture(0)
 
@@ -160,12 +168,14 @@ def main():
     attention_tracker = AttentionTracker(max_history=60)
     session_tracker = SessionTracker()
     blink_detector = BlinkDetector(threshold=0.21, consecutive_frames=2)
+    gaze_heatmap = GazeHeatmap()
 
     current_gaze = "Unknown"
     attention_state = "Unknown"
     attention_score = 0
     blink_count = 0
     ear_value = None
+    last_frame_shape = None
 
     while True:
         ret, frame = cap.read()
@@ -173,6 +183,8 @@ def main():
         if not ret:
             print("Failed to read frame")
             break
+
+        last_frame_shape = frame.shape
 
         results = detector.process(frame)
         landmarks = detector.get_landmarks(frame, results)
@@ -187,7 +199,6 @@ def main():
             draw_eye_contour(frame, left_eye_points)
             draw_eye_contour(frame, right_eye_points)
 
-            # Blink detection
             blink_count, ear_value = blink_detector.update(
                 left_eye_points,
                 right_eye_points
@@ -227,6 +238,16 @@ def main():
                 right_gaze = estimate_gaze(right_pupil, right_eye_width)
 
             current_gaze = combine_gaze(left_gaze, right_gaze)
+
+            gaze_point = gaze_heatmap.estimate_point_from_gaze(
+                current_gaze,
+                frame.shape
+            )
+
+            gaze_heatmap.update_gaze_points(gaze_point)
+
+            if gaze_point is not None:
+                cv2.circle(frame, gaze_point, 8, (0, 255, 255), -1)
 
             # Optional debug windows
             if left_eye_crop is not None and left_eye_crop.size > 0:
@@ -270,16 +291,20 @@ def main():
             distraction_count=distraction_count,
             engagement_label=engagement_label,
             blink_count=blink_count,
-            ear_value=ear_value
+            ear_value=ear_value,
+            recorded_points=len(gaze_heatmap.points)
         )
 
-        cv2.imshow("Phase 9 - Blink Detection", frame)
+        cv2.imshow("Phase 10 - Heatmap Visualization", frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
     cap.release()
     cv2.destroyAllWindows()
+
+    if last_frame_shape is not None:
+        gaze_heatmap.generate_heatmap(last_frame_shape)
 
 
 if __name__ == "__main__":
